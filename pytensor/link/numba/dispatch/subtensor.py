@@ -5,7 +5,6 @@ from pytensor.link.numba.dispatch import numba_funcify
 from pytensor.link.numba.dispatch.basic import generate_fallback_impl, numba_njit
 from pytensor.link.utils import compile_function_src, unique_name_generator
 from pytensor.tensor import TensorType
-from pytensor.tensor.rewriting.subtensor import is_full_slice
 from pytensor.tensor.subtensor import (
     AdvancedIncSubtensor,
     AdvancedIncSubtensor1,
@@ -14,7 +13,6 @@ from pytensor.tensor.subtensor import (
     IncSubtensor,
     Subtensor,
 )
-from pytensor.tensor.type_other import NoneTypeT, SliceType
 
 
 @numba_funcify.register(Subtensor)
@@ -49,7 +47,7 @@ def numba_funcify_default_subtensor(op, node, **kwargs):
 
     input_names = [unique_names(v, force_unique=True) for v in node.inputs]
     op_indices = list(node.inputs[index_start_idx:])
-    idx_list = getattr(op, "idx_list", None)
+    idx_list = op.idx_list
 
     indices_creation_src = (
         tuple(convert_indices(op_indices, idx) for idx in idx_list)
@@ -115,7 +113,7 @@ def numba_funcify_AdvancedSubtensor(op, node, **kwargs):
     basic_idxs = []
     adv_idxs = []
     input_idx = 0
-    
+
     for i, entry in enumerate(op.idx_list):
         if isinstance(entry, slice):
             # Basic slice index
@@ -124,12 +122,14 @@ def numba_funcify_AdvancedSubtensor(op, node, **kwargs):
             # Advanced tensor index
             if input_idx < len(tensor_inputs):
                 idx_input = tensor_inputs[input_idx]
-                adv_idxs.append({
-                    "axis": i,
-                    "dtype": idx_input.type.dtype,
-                    "bcast": idx_input.type.broadcastable,
-                    "ndim": idx_input.type.ndim,
-                })
+                adv_idxs.append(
+                    {
+                        "axis": i,
+                        "dtype": idx_input.type.dtype,
+                        "bcast": idx_input.type.broadcastable,
+                        "ndim": idx_input.type.ndim,
+                    }
+                )
                 input_idx += 1
 
     # Special implementation for consecutive integer vector indices
